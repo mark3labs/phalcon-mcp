@@ -12,8 +12,11 @@ COPY . .
 # Build the application
 RUN CGO_ENABLED=0 GOOS=linux go build -o phalcon-mcp -a -ldflags '-extldflags "-static"' .
 
-# Use scratch as the final base image
-FROM scratch
+# Use alpine as the final base image instead of scratch to include certificates
+FROM alpine:latest
+
+# Install CA certificates
+RUN apk --no-cache add ca-certificates
 
 # Copy the binary from the builder stage
 COPY --from=builder /app/phalcon-mcp /phalcon-mcp
