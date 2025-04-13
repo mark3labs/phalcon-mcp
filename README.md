@@ -77,6 +77,36 @@ To integrate this server with apps that support MCP:
 }
 ```
 
+### Docker
+
+#### Running with Docker
+
+You can run the Phalcon MCP server using Docker:
+
+```bash
+docker run -i --rm ghcr.io/mark3labs/phalcon-mcp:latest serve
+```
+
+#### Docker Configuration with MCP
+
+To integrate the Docker image with apps that support MCP:
+
+```json
+{
+  "mcpServers": {
+    "phalcon": {
+      "command": "docker",
+      "args": [
+        "run",
+        "-i",
+        "--rm",
+        "ghcr.io/mark3labs/phalcon-mcp:latest"
+      ]
+    }
+  }
+}
+```
+
 ## License
 
 MIT
