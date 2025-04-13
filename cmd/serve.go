@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/cookiejar"
 	"strconv"
+	"strings"
 	"sync"
 
 	"github.com/mark3labs/mcp-go/mcp"
@@ -108,6 +109,15 @@ var serveCmd = &cobra.Command{
 			),
 		)
 
+		// Add get-chain-id-by-name tool
+		getChainIdTool := mcp.NewTool("get-chain-id-by-name",
+			mcp.WithDescription("Get the chain ID for a blockchain by name, chain, or chainSlug"),
+			mcp.WithString("name",
+				mcp.Required(),
+				mcp.Description("The name of the blockchain to look up"),
+			),
+		)
+
 		// Add tool handlers
 		s.AddTool(traceTool, traceHandler)
 		s.AddTool(profileTool, profileHandler)
@@ -115,6 +125,7 @@ var serveCmd = &cobra.Command{
 		s.AddTool(balanceChangeTool, balanceChangeHandler)
 		s.AddTool(stateChangeTool, stateChangeHandler)
 		s.AddTool(transactionOverviewTool, transactionOverviewHandler)
+		s.AddTool(getChainIdTool, getChainIdByNameHandler)
 
 		// Start the stdio server
 		if err := server.ServeStdio(s); err != nil {
@@ -322,6 +333,14 @@ type OverviewResult struct {
 	Results map[string]Result `json:"results"`
 }
 
+// ChainData represents the data for a blockchain from chainlist.org
+type ChainData struct {
+	Name      string `json:"name"`
+	Chain     string `json:"chain"`
+	ChainSlug string `json:"chainSlug"`
+	ChainId   uint64 `json:"chainId"`
+}
+
 // transactionOverviewHandler handles transaction-overview requests by calling all other handlers in parallel
 func transactionOverviewHandler(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	// Define the endpoints to query
@@ -404,6 +423,94 @@ func transactionOverviewHandler(ctx context.Context, request mcp.CallToolRequest
 	}
 
 	return mcp.NewToolResultText(string(resultJSON)), nil
+}
+
+// fetchChainList fetches the chain list from chainlist.org
+func fetchChainList() ([]ChainData, error) {
+	resp, err := http.Get("https://chainlist.org/rpcs.json")
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch chain list: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("chainlist.org returned non-200 status code: %d", resp.StatusCode)
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response body: %v", err)
+	}
+
+	var chains []ChainData
+	if err := json.Unmarshal(body, &chains); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal chain list: %v", err)
+	}
+
+	return chains, nil
+}
+
+// findChainByName searches for a chain by name, chain, or chainSlug
+func findChainByName(chains []ChainData, searchTerm string) (string, error) {
+	searchTerm = strings.ToLower(strings.TrimSpace(searchTerm))
+	if searchTerm == "" {
+		return "", fmt.Errorf("search term cannot be empty")
+	}
+
+	// Track closest matches
+	var nameMatches []ChainData
+	var containsMatches []ChainData
+
+	// First pass: look for exact matches or contains
+	for _, chain := range chains {
+		nameLower := strings.ToLower(chain.Name)
+		chainLower := strings.ToLower(chain.Chain)
+		slugLower := strings.ToLower(chain.ChainSlug)
+
+		// Check for exact matches first (prioritize these)
+		if nameLower == searchTerm || chainLower == searchTerm || slugLower == searchTerm {
+			nameMatches = append(nameMatches, chain)
+		} else if strings.Contains(nameLower, searchTerm) {
+			// If not exact, check if name contains the search term
+			containsMatches = append(containsMatches, chain)
+		}
+	}
+
+	// Return first exact match if found
+	if len(nameMatches) > 0 {
+		return strconv.FormatUint(nameMatches[0].ChainId, 10), nil
+	}
+
+	// Return first contains match if found
+	if len(containsMatches) > 0 {
+		return strconv.FormatUint(containsMatches[0].ChainId, 10), nil
+	}
+
+	return "", fmt.Errorf("no chain found matching '%s'", searchTerm)
+}
+
+// getChainIdByNameHandler handles requests to get a chain ID by name
+func getChainIdByNameHandler(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	// Extract the chain name parameter
+	chainName, ok := request.Params.Arguments["name"].(string)
+	if !ok {
+		return nil, fmt.Errorf("name must be a string")
+	}
+
+	// Fetch the chain list
+	chains, err := fetchChainList()
+	if err != nil {
+		return nil, err
+	}
+
+	// Find the chain by name
+	chainId, err := findChainByName(chains, chainName)
+	if err != nil {
+		return nil, err
+	}
+
+	// Return the chain ID
+	return mcp.NewToolResultText(chainId), nil
 }
 
 func init() {
