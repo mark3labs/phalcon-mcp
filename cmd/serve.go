@@ -182,78 +182,119 @@ func createHTTPClient() (*http.Client, error) {
 	return client, nil
 }
 
-// fetchBlocksecCookies visits the main site to get cookies
+// fetchBlocksecCookies visits the main site to get cookies with retries
 func fetchBlocksecCookies(client *http.Client) error {
+	maxRetries := 3
+	var lastErr error
 	mainPageURL := "https://app.blocksec.com/explorer"
-	req, err := http.NewRequest("GET", mainPageURL, nil)
-	if err != nil {
-		return fmt.Errorf("failed to create request to main page: %v", err)
+
+	for attempt := 0; attempt <= maxRetries; attempt++ {
+		// If this is a retry attempt, log it
+		if attempt > 0 {
+			fmt.Printf("Retrying cookie fetch (attempt %d/%d)\n", attempt, maxRetries)
+		}
+
+		req, err := http.NewRequest("GET", mainPageURL, nil)
+		if err != nil {
+			return fmt.Errorf("failed to create request to main page: %v", err)
+		}
+
+		// Set browser-like headers
+		req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36")
+		req.Header.Set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8")
+		req.Header.Set("Accept-Language", "en-US,en;q=0.5")
+		req.Header.Set("Connection", "keep-alive")
+		req.Header.Set("Upgrade-Insecure-Requests", "1")
+
+		// Get main page to retrieve cookies
+		mainResp, err := client.Do(req)
+		if err != nil {
+			lastErr = fmt.Errorf("failed to send request to main site: %v", err)
+			continue
+		}
+
+		// Check for successful response
+		if mainResp.StatusCode != http.StatusOK {
+			mainResp.Body.Close()
+			lastErr = fmt.Errorf("main site returned non-200 status code: %d", mainResp.StatusCode)
+			continue
+		}
+
+		mainResp.Body.Close() // We don't need the body
+		return nil            // Success
 	}
 
-	// Set browser-like headers
-	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36")
-	req.Header.Set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8")
-	req.Header.Set("Accept-Language", "en-US,en;q=0.5")
-	req.Header.Set("Connection", "keep-alive")
-	req.Header.Set("Upgrade-Insecure-Requests", "1")
-
-	// Get main page to retrieve cookies
-	mainResp, err := client.Do(req)
-	if err != nil {
-		return fmt.Errorf("failed to send request to main site: %v", err)
-	}
-	mainResp.Body.Close() // We don't need the body
-
-	return nil
+	// If we've tried maxRetries times and still failed, return the last error
+	return fmt.Errorf("failed to fetch cookies after %d attempts: %v", maxRetries, lastErr)
 }
 
-// callBlocksecAPI makes an API call to the BlockSec API
+// callBlocksecAPI makes an API call to the BlockSec API with retries
 func callBlocksecAPI(client *http.Client, endpoint string, chainId int, txHash string) ([]byte, error) {
-	// Now make the API request with cookies
-	reqBody := BlocksecTraceRequest{
-		ChainID: chainId,
-		TxnHash: txHash,
-		Blocked: false,
+	// Configure retries
+	maxRetries := 3
+	var lastErr error
+	var respBody []byte
+
+	for attempt := 0; attempt <= maxRetries; attempt++ {
+		// If this is a retry attempt, log it
+		if attempt > 0 {
+			fmt.Printf("Retrying BlockSec API call (attempt %d/%d) for endpoint %s\n", attempt, maxRetries, endpoint)
+		}
+
+		// Prepare the API request with cookies
+		reqBody := BlocksecTraceRequest{
+			ChainID: chainId,
+			TxnHash: txHash,
+			Blocked: false,
+		}
+
+		// Convert request to JSON
+		jsonData, err := json.Marshal(reqBody)
+		if err != nil {
+			return nil, fmt.Errorf("failed to marshal request: %v", err)
+		}
+
+		// Create a new request for the API
+		apiURL := fmt.Sprintf("https://app.blocksec.com/api/v1/onchain/tx/%s", endpoint)
+		apiReq, err := http.NewRequest("POST", apiURL, bytes.NewBuffer(jsonData))
+		if err != nil {
+			return nil, fmt.Errorf("failed to create API request: %v", err)
+		}
+
+		// Set headers to mimic a browser for the API request
+		apiReq.Header.Set("Content-Type", "application/json")
+		apiReq.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36")
+		apiReq.Header.Set("Accept", "application/json, text/plain, */*")
+		apiReq.Header.Set("Origin", "https://app.blocksec.com")
+		apiReq.Header.Set("Referer", "https://app.blocksec.com/explorer")
+
+		// Send the API request
+		resp, err := client.Do(apiReq)
+		if err != nil {
+			lastErr = fmt.Errorf("failed to send request to BlockSec API: %v", err)
+			continue // Try again
+		}
+
+		// Read response body
+		respBody, err = io.ReadAll(resp.Body)
+		resp.Body.Close()
+
+		if err != nil {
+			lastErr = fmt.Errorf("failed to read response: %v", err)
+			continue // Try again
+		}
+
+		// Check if the request was successful
+		if resp.StatusCode == http.StatusOK {
+			return respBody, nil // Success, return the response
+		}
+
+		// If we got here, the request failed with a non-200 status code
+		lastErr = fmt.Errorf("BlockSec API returned non-200 status code: %d - %s", resp.StatusCode, string(respBody))
 	}
 
-	// Convert request to JSON
-	jsonData, err := json.Marshal(reqBody)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal request: %v", err)
-	}
-
-	// Create a new request for the API
-	apiURL := fmt.Sprintf("https://app.blocksec.com/api/v1/onchain/tx/%s", endpoint)
-	apiReq, err := http.NewRequest("POST", apiURL, bytes.NewBuffer(jsonData))
-	if err != nil {
-		return nil, fmt.Errorf("failed to create API request: %v", err)
-	}
-
-	// Set headers to mimic a browser for the API request
-	apiReq.Header.Set("Content-Type", "application/json")
-	apiReq.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36")
-	apiReq.Header.Set("Accept", "application/json, text/plain, */*")
-	apiReq.Header.Set("Origin", "https://app.blocksec.com")
-	apiReq.Header.Set("Referer", "https://app.blocksec.com/explorer")
-
-	// Send the API request
-	resp, err := client.Do(apiReq)
-	if err != nil {
-		return nil, fmt.Errorf("failed to send request to BlockSec API: %v", err)
-	}
-	defer resp.Body.Close()
-
-	// Read response body
-	respBody, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read response: %v", err)
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("BlockSec API returned non-200 status code: %d - %s", resp.StatusCode, string(respBody))
-	}
-
-	return respBody, nil
+	// If we've tried maxRetries times and still failed, return the last error
+	return nil, fmt.Errorf("failed after %d attempts: %v", maxRetries, lastErr)
 }
 
 // formatJSONResponse formats the response as prettified JSON
@@ -425,29 +466,51 @@ func transactionOverviewHandler(ctx context.Context, request mcp.CallToolRequest
 	return mcp.NewToolResultText(string(resultJSON)), nil
 }
 
-// fetchChainList fetches the chain list from chainlist.org
+// fetchChainList fetches the chain list from chainlist.org with retries
 func fetchChainList() ([]ChainData, error) {
-	resp, err := http.Get("https://chainlist.org/rpcs.json")
-	if err != nil {
-		return nil, fmt.Errorf("failed to fetch chain list: %v", err)
-	}
-	defer resp.Body.Close()
+	maxRetries := 3
+	var lastErr error
 
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("chainlist.org returned non-200 status code: %d", resp.StatusCode)
+	for attempt := 0; attempt <= maxRetries; attempt++ {
+		// If this is a retry attempt, log it
+		if attempt > 0 {
+			fmt.Printf("Retrying chainlist.org API call (attempt %d/%d)\n", attempt, maxRetries)
+		}
+
+		resp, err := http.Get("https://chainlist.org/rpcs.json")
+		if err != nil {
+			lastErr = fmt.Errorf("failed to fetch chain list: %v", err)
+			continue
+		}
+
+		// Read body and close response
+		body, err := io.ReadAll(resp.Body)
+		resp.Body.Close()
+
+		if err != nil {
+			lastErr = fmt.Errorf("failed to read response body: %v", err)
+			continue
+		}
+
+		// Check status code
+		if resp.StatusCode != http.StatusOK {
+			lastErr = fmt.Errorf("chainlist.org returned non-200 status code: %d", resp.StatusCode)
+			continue
+		}
+
+		// Try to unmarshal the response
+		var chains []ChainData
+		if err := json.Unmarshal(body, &chains); err != nil {
+			lastErr = fmt.Errorf("failed to unmarshal chain list: %v", err)
+			continue
+		}
+
+		// Success - return the chains
+		return chains, nil
 	}
 
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read response body: %v", err)
-	}
-
-	var chains []ChainData
-	if err := json.Unmarshal(body, &chains); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal chain list: %v", err)
-	}
-
-	return chains, nil
+	// If we've tried maxRetries times and still failed, return the last error
+	return nil, fmt.Errorf("failed to fetch chain list after %d attempts: %v", maxRetries, lastErr)
 }
 
 // findChainByName searches for a chain by name, chain, or chainSlug
