@@ -8,7 +8,7 @@ import (
 
 var (
 	// Version holds the current version of the CLI
-	Version = "0.1.0"
+	Version = "0.1.2"
 )
 
 // versionCmd represents the version command
