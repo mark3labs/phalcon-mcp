@@ -100,7 +100,8 @@ To integrate the Docker image with apps that support MCP:
         "run",
         "-i",
         "--rm",
-        "ghcr.io/mark3labs/phalcon-mcp:latest"
+        "ghcr.io/mark3labs/phalcon-mcp:latest",
+        "serve"
       ]
     }
   }
