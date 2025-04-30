@@ -189,10 +189,6 @@ func fetchBlocksecCookies(client *http.Client) error {
 	mainPageURL := "https://app.blocksec.com/explorer"
 
 	for attempt := 0; attempt <= maxRetries; attempt++ {
-		// If this is a retry attempt, log it
-		if attempt > 0 {
-			fmt.Printf("Retrying cookie fetch (attempt %d/%d)\n", attempt, maxRetries)
-		}
 
 		req, err := http.NewRequest("GET", mainPageURL, nil)
 		if err != nil {
@@ -236,11 +232,6 @@ func callBlocksecAPI(client *http.Client, endpoint string, chainId int, txHash s
 	var respBody []byte
 
 	for attempt := 0; attempt <= maxRetries; attempt++ {
-		// If this is a retry attempt, log it
-		if attempt > 0 {
-			fmt.Printf("Retrying BlockSec API call (attempt %d/%d) for endpoint %s\n", attempt, maxRetries, endpoint)
-		}
-
 		// Prepare the API request with cookies
 		reqBody := BlocksecTraceRequest{
 			ChainID: chainId,
@@ -468,11 +459,6 @@ func fetchChainList() ([]ChainData, error) {
 	var lastErr error
 
 	for attempt := 0; attempt <= maxRetries; attempt++ {
-		// If this is a retry attempt, log it
-		if attempt > 0 {
-			fmt.Printf("Retrying chainlist.org API call (attempt %d/%d)\n", attempt, maxRetries)
-		}
-
 		resp, err := http.Get("https://chainlist.org/rpcs.json")
 		if err != nil {
 			lastErr = fmt.Errorf("failed to fetch chain list: %v", err)
