@@ -297,14 +297,10 @@ func callBlocksecAPI(client *http.Client, endpoint string, chainId int, txHash s
 	return nil, fmt.Errorf("failed after %d attempts: %v", maxRetries, lastErr)
 }
 
-// formatJSONResponse formats the response as prettified JSON
+// formatJSONResponse formats the response as compact JSON
 func formatJSONResponse(respBody []byte) (*mcp.CallToolResult, error) {
-	var prettyJSON bytes.Buffer
-	if err := json.Indent(&prettyJSON, respBody, "", "  "); err != nil {
-		return mcp.NewToolResultText(string(respBody)), nil
-	}
-
-	return mcp.NewToolResultText(prettyJSON.String()), nil
+	// Return the raw JSON without indentation
+	return mcp.NewToolResultText(string(respBody)), nil
 }
 
 // handleBlocksecRequest handles all BlockSec API requests using shared code
@@ -458,7 +454,7 @@ func transactionOverviewHandler(ctx context.Context, request mcp.CallToolRequest
 	wg.Wait()
 
 	// Convert the overview result to JSON
-	resultJSON, err := json.MarshalIndent(overviewResult, "", "  ")
+	resultJSON, err := json.Marshal(overviewResult)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal overview results: %v", err)
 	}

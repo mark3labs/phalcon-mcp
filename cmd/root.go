@@ -10,11 +10,7 @@ import (
 var rootCmd = &cobra.Command{
 	Use:   "phalcon-mcp",
 	Short: "Phalcon MCP CLI tool",
-	Long: `Phalcon MCP is a command line interface tool.
-
-This application currently does nothing but will be expanded in the future.`,
-	// Uncomment the following line if your bare application
-	// has an action associated with it:
+	Long:  `Phalcon MCP is a command line interface tool.`,
 	Run: func(cmd *cobra.Command, args []string) {
 		cmd.Println("Welcome to Phalcon MCP!")
 	},
@@ -30,13 +26,5 @@ func Execute() {
 }
 
 func init() {
-	// Here you will define your flags and configuration settings.
-	// Cobra supports persistent flags, which, if defined here,
-	// will be global for your application.
-
-	// rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.phalcon-mcp.yaml)")
-
-	// Cobra also supports local flags, which will only run
-	// when this action is called directly.
 	rootCmd.Flags().BoolP("version", "v", false, "Print the version number")
 }
