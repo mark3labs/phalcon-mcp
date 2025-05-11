@@ -2,6 +2,8 @@
 
 This MCP server integrates with the [BlockSec](https://blocksec.com) platform to provide blockchain transaction analysis tools via the Model Context Protocol (MCP).
 
+The Model Context Protocol (MCP) is a protocol for AI model integration, allowing AI models to access external tools and data sources.
+
 ## Components
 
 ### Tools
@@ -60,6 +62,24 @@ Check the version:
 
 ```bash
 phalcon-mcp version
+```
+
+### Using as a Package
+
+You can import the server in your Go projects:
+
+```go
+import "github.com/mark3labs/phalcon-mcp/server"
+
+func main() {
+    // Create a new server with version
+    s := server.NewServer("1.0.0")
+    
+    // Start the server in stdio mode
+    if err := s.ServeStdio(); err != nil {
+        log.Fatalf("Server error: %v", err)
+    }
+}
 ```
 
 ### Usage with Model Context Protocol
