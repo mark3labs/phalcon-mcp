@@ -136,6 +136,11 @@ func (s *Server) ServeStdio() error {
 	return mcpserver.ServeStdio(s.mcpServer)
 }
 
+// GetMCPServer returns the underlying MCPServer for use with InProcessTransport
+func (s *Server) GetMCPServer() *mcpserver.MCPServer {
+	return s.mcpServer
+}
+
 // BlocksecTraceRequest represents the request payload for BlockSec API
 type BlocksecTraceRequest struct {
 	ChainID int    `json:"chainID"`
@@ -145,9 +150,9 @@ type BlocksecTraceRequest struct {
 
 // extractRequestParams extracts and validates chainId and transactionHash from the request
 func extractRequestParams(request mcp.CallToolRequest) (int, string, error) {
-	chainIdStr, ok := request.Params.Arguments["chainId"].(string)
-	if !ok {
-		return 0, "", fmt.Errorf("chainId must be a string")
+	chainIdStr, err := request.RequireString("chainId")
+	if err != nil {
+		return 0, "", fmt.Errorf("chainId is required: %v", err)
 	}
 
 	// Convert chainId to integer
@@ -156,9 +161,9 @@ func extractRequestParams(request mcp.CallToolRequest) (int, string, error) {
 		return 0, "", fmt.Errorf("invalid chainId format: %v", err)
 	}
 
-	txHash, ok := request.Params.Arguments["transactionHash"].(string)
-	if !ok {
-		return 0, "", fmt.Errorf("transactionHash must be a string")
+	txHash, err := request.RequireString("transactionHash")
+	if err != nil {
+		return 0, "", fmt.Errorf("transactionHash is required: %v", err)
 	}
 
 	return chainId, txHash, nil
@@ -539,9 +544,9 @@ func findChainByName(chains []ChainData, searchTerm string) (string, error) {
 // getChainIdByNameHandler handles requests to get a chain ID by name
 func (s *Server) getChainIdByNameHandler(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	// Extract the chain name parameter
-	chainName, ok := request.Params.Arguments["name"].(string)
-	if !ok {
-		return nil, fmt.Errorf("name must be a string")
+	chainName, err := request.RequireString("name")
+	if err != nil {
+		return nil, fmt.Errorf("name is required: %v", err)
 	}
 
 	// Fetch the chain list

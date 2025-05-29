@@ -68,6 +68,8 @@ phalcon-mcp version
 
 You can import the server in your Go projects:
 
+#### Stdio Mode
+
 ```go
 import "github.com/mark3labs/phalcon-mcp/server"
 
@@ -78,6 +80,58 @@ func main() {
     // Start the server in stdio mode
     if err := s.ServeStdio(); err != nil {
         log.Fatalf("Server error: %v", err)
+    }
+}
+```
+
+#### In-Process Mode
+
+For in-process usage with the mcp-go client library:
+
+```go
+import (
+    "context"
+    "log"
+    
+    "github.com/mark3labs/mcp-go/client"
+    "github.com/mark3labs/mcp-go/client/transport"
+    "github.com/mark3labs/phalcon-mcp/server"
+)
+
+func main() {
+    // Create the Phalcon MCP server
+    phalconServer := server.NewServer("1.0.0")
+
+    // Create an in-process transport using the server's MCPServer
+    inProcessTransport := transport.NewInProcessTransport(phalconServer.GetMCPServer())
+
+    // Create an MCP client using the in-process transport
+    mcpClient := client.NewMCPClient(inProcessTransport)
+
+    // Start the transport
+    ctx := context.Background()
+    if err := mcpClient.Connect(ctx); err != nil {
+        log.Fatalf("Failed to connect: %v", err)
+    }
+    defer mcpClient.Close()
+
+    // Initialize the client
+    if err := mcpClient.Initialize(ctx); err != nil {
+        log.Fatalf("Failed to initialize: %v", err)
+    }
+
+    // List available tools
+    tools, err := mcpClient.ListTools(ctx)
+    if err != nil {
+        log.Fatalf("Failed to list tools: %v", err)
+    }
+
+    // Use the tools...
+    result, err := mcpClient.CallTool(ctx, "get-chain-id-by-name", map[string]any{
+        "name": "ethereum",
+    })
+    if err != nil {
+        log.Fatalf("Failed to call tool: %v", err)
     }
 }
 ```
