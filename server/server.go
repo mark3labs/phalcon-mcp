@@ -306,24 +306,24 @@ func (s *Server) handleBlocksecRequest(ctx context.Context, request mcp.CallTool
 	// Extract and validate parameters
 	chainId, txHash, err := extractRequestParams(request)
 	if err != nil {
-		return nil, err
+		return mcp.NewToolResultError(err.Error()), nil
 	}
 
 	// Create HTTP client
 	client, err := createHTTPClient()
 	if err != nil {
-		return nil, err
+		return mcp.NewToolResultError(err.Error()), nil
 	}
 
 	// Fetch cookies
 	if err := fetchBlocksecCookies(client); err != nil {
-		return nil, err
+		return mcp.NewToolResultError(err.Error()), nil
 	}
 
 	// Call the API
 	respBody, err := callBlocksecAPI(client, endpoint, chainId, txHash)
 	if err != nil {
-		return nil, err
+		return mcp.NewToolResultError(err.Error()), nil
 	}
 
 	// Format and return the response
@@ -393,18 +393,18 @@ func (s *Server) transactionOverviewHandler(ctx context.Context, request mcp.Cal
 	// Extract and validate parameters once
 	chainId, txHash, err := extractRequestParams(request)
 	if err != nil {
-		return nil, err
+		return mcp.NewToolResultError(err.Error()), nil
 	}
 
 	// Create HTTP client
 	client, err := createHTTPClient()
 	if err != nil {
-		return nil, err
+		return mcp.NewToolResultError(err.Error()), nil
 	}
 
 	// Fetch cookies once
 	if err := fetchBlocksecCookies(client); err != nil {
-		return nil, err
+		return mcp.NewToolResultError(err.Error()), nil
 	}
 
 	// Create a wait group to synchronize goroutines
@@ -454,7 +454,7 @@ func (s *Server) transactionOverviewHandler(ctx context.Context, request mcp.Cal
 	// Convert the overview result to JSON
 	resultJSON, err := json.Marshal(overviewResult)
 	if err != nil {
-		return nil, fmt.Errorf("failed to marshal overview results: %v", err)
+		return mcp.NewToolResultError(fmt.Sprintf("failed to marshal overview results: %v", err)), nil
 	}
 
 	return mcp.NewToolResultText(string(resultJSON)), nil
@@ -546,19 +546,19 @@ func (s *Server) getChainIdByNameHandler(ctx context.Context, request mcp.CallTo
 	// Extract the chain name parameter
 	chainName, err := request.RequireString("name")
 	if err != nil {
-		return nil, fmt.Errorf("name is required: %v", err)
+		return mcp.NewToolResultError(fmt.Sprintf("name is required: %v", err)), nil
 	}
 
 	// Fetch the chain list
 	chains, err := fetchChainList()
 	if err != nil {
-		return nil, err
+		return mcp.NewToolResultError(err.Error()), nil
 	}
 
 	// Find the chain by name
 	chainId, err := findChainByName(chains, chainName)
 	if err != nil {
-		return nil, err
+		return mcp.NewToolResultError(err.Error()), nil
 	}
 
 	// Return the chain ID
