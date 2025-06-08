@@ -90,49 +90,67 @@ For in-process usage with the mcp-go client library:
 
 ```go
 import (
-    "context"
-    "log"
-    
-    "github.com/mark3labs/mcp-go/client"
-    "github.com/mark3labs/mcp-go/client/transport"
-    "github.com/mark3labs/phalcon-mcp/server"
+	"context"
+	"fmt"
+	"log"
+
+	"github.com/mark3labs/mcp-go/client"
+	"github.com/mark3labs/mcp-go/mcp"
+	"github.com/mark3labs/phalcon-mcp/server"
 )
 
 func main() {
-    // Create the Phalcon MCP server
-    phalconServer := server.NewServer("1.0.0")
+	// Create the Phalcon MCP server
+	phalconServer := server.NewServer("1.0.0")
 
-    // Create an in-process transport using the server's MCPServer
-    inProcessTransport := transport.NewInProcessTransport(phalconServer.GetMCPServer())
+	// Create an MCP client using the phalconServer's MCPServer
+	mcpClient, err := client.NewInProcessClient(phalconServer.GetMCPServer())
+	if err != nil {
+		log.Fatalf("Failed to create client: %v", err)
+	}
+	defer mcpClient.Close()
 
-    // Create an MCP client using the in-process transport
-    mcpClient := client.NewMCPClient(inProcessTransport)
+	// Connect to the MCPServer
+	ctx := context.Background()
+	if err := mcpClient.Start(ctx); err != nil {
+		log.Fatalf("Failed to start client: %v", err)
+	}
 
-    // Start the transport
-    ctx := context.Background()
-    if err := mcpClient.Connect(ctx); err != nil {
-        log.Fatalf("Failed to connect: %v", err)
-    }
-    defer mcpClient.Close()
+	// Initialize the client
+	initRequest := mcp.InitializeRequest{
+		Params: mcp.InitializeParams{
+			ClientInfo: mcp.Implementation{
+				Name:    fmt.Sprintf("phalcon_client_%s", phalconServer.GetVersion()),
+				Version: phalconServer.GetVersion(),
+			},
+		},
+	}
+	_, err = mcpClient.Initialize(ctx, initRequest)
+	if err != nil {
+		log.Fatalf("Failed to initialize: %v", err)
+	}
 
-    // Initialize the client
-    if err := mcpClient.Initialize(ctx); err != nil {
-        log.Fatalf("Failed to initialize: %v", err)
-    }
+	// List available tools
+	toolListResult, err := mcpClient.ListTools(context.Background(), mcp.ListToolsRequest{})
+	if err != nil {
+		log.Fatalf("ListTools failed: %v", err)
+	}
+	log.Printf("list tools result %v", toolListResult)
 
-    // List available tools
-    tools, err := mcpClient.ListTools(ctx)
-    if err != nil {
-        log.Fatalf("Failed to list tools: %v", err)
-    }
-
-    // Use the tools...
-    result, err := mcpClient.CallTool(ctx, "get-chain-id-by-name", map[string]any{
-        "name": "ethereum",
-    })
-    if err != nil {
-        log.Fatalf("Failed to call tool: %v", err)
-    }
+	// Use the tools...
+	request := mcp.CallToolRequest{
+		Params: mcp.CallToolParams{
+			Name: "get-chain-id-by-name",
+			Arguments: map[string]any{
+				"name": "ethereum",
+			},
+		},
+	}
+	result, err := mcpClient.CallTool(ctx, request)
+	if err != nil {
+		log.Fatalf("CallTool failed: %v", err)
+	}
+	log.Printf("call tool result %v", result)
 }
 ```
 
