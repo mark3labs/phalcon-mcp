@@ -180,10 +180,6 @@ func createHTTPClient() (*http.Client, error) {
 	// Create HTTP client with the cookiejar
 	client := &http.Client{
 		Jar: jar,
-		// Don't follow redirects
-		CheckRedirect: func(req *http.Request, via []*http.Request) error {
-			return http.ErrUseLastResponse
-		},
 	}
 
 	return client, nil
